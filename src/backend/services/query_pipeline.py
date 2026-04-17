@@ -21,7 +21,7 @@ import pandas as pd
 from fastapi import HTTPException
 
 from config import VALID_INTENTS, SQL_RETRY_LIMIT
-from utils.gemini_client import generate, strip_markdown_fences
+from utils.llm_client import generate, strip_markdown_fences
 from utils.sql_sanitizer import sanitize_sql
 from services.driver_analysis import (
     auto_detect_periods,

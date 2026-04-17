@@ -19,7 +19,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from utils.duckdb_manager import get_session
-from utils.gemini_client import generate
+from utils.llm_client import generate
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -30,7 +30,7 @@ import duckdb
 import pandas as pd
 from fastapi import HTTPException
 
-from utils.gemini_client import generate, strip_markdown_fences
+from utils.llm_client import generate, strip_markdown_fences
 
 logger = logging.getLogger(__name__)
 

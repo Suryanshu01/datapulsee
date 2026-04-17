@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 
-from utils.gemini_client import generate, strip_markdown_fences
+from utils.llm_client import generate, strip_markdown_fences
 
 logger = logging.getLogger(__name__)
 

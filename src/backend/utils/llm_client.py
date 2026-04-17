@@ -1,12 +1,12 @@
 """
-Thin wrapper around the Groq API (OpenAI-compatible).
+Thin wrapper around the Groq API (Llama 3.1).
 
 Centralising all LLM calls here means:
   - API key validation happens in one place.
   - Retry / backoff logic is shared across every service that calls the model.
   - Tests can mock this module without touching individual services.
 
-Model choice: llama-3.3-70b-versatile — fast, highly capable, generous free tier.
+Model choice: llama-3.1-8b-instant — fast, highly capable, generous free tier.
 """
 
 from __future__ import annotations

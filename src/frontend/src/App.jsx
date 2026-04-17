@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { LayoutDashboard, MessageSquare, BookOpen, Search, Plus } from "lucide-react";
 import UploadPanel from "./components/UploadPanel";
 import ChatInterface from "./components/ChatInterface";
 import SemanticLayer from "./components/SemanticLayer";
@@ -12,6 +13,11 @@ export default function App() {
   const [messages, setMessages]       = useState([]);
   const [loading, setLoading]         = useState(false);
   const [activePanel, setActivePanel] = useState("dashboard"); // dashboard | chat | semantic | preview
+  const [theme, setTheme] = useState("light");
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   const handleUploadResult = useCallback((data, displayName) => {
     setSession({ ...data, filename: displayName });
@@ -94,7 +100,15 @@ export default function App() {
         }]);
       }
     } catch (err) {
-      setMessages((prev) => [...prev, { role: "assistant", content: "Sorry, I couldn't answer that. " + err.message }]);
+      const isRateLimit = err.message?.includes("429") || err.message?.toLowerCase().includes("rate limit");
+      setMessages((prev) => [...prev, {
+        role: "error",
+        content: isRateLimit
+          ? "The AI service is temporarily rate-limited. This usually resolves in a minute."
+          : "Something went wrong while processing your question.",
+        errorDetail: err.message,
+        originalQuestion: question,
+      }]);
     }
     setLoading(false);
   }, [session]);
@@ -103,6 +117,17 @@ export default function App() {
   if (!session) {
     return (
       <div className="landing">
+        <button
+          className="theme-toggle-float"
+          onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+        >
+          {theme === "dark" ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>
+          )}
+        </button>
         <div className="landing-inner">
           <div className="landing-logo">
             <div className="landing-logo-mark">DP</div>
@@ -134,34 +159,47 @@ export default function App() {
           <span className="logo-name">DataPulse</span>
         </div>
 
+        <button
+          className="theme-toggle"
+          onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+        >
+          {theme === "dark" ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>
+          )}
+          <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+        </button>
+
         <div className="nav-group">
           <div className="nav-group-label">Workspace</div>
           <button
             className={`nav-item ${activePanel === "dashboard" ? "active" : ""}`}
             onClick={() => setActivePanel("dashboard")}
           >
-            <span className="nav-item-icon">📊</span>
+            <span className="nav-item-icon"><LayoutDashboard size={16} /></span>
             <span className="nav-item-label">Overview</span>
           </button>
           <button
             className={`nav-item ${activePanel === "chat" ? "active" : ""}`}
             onClick={() => setActivePanel("chat")}
           >
-            <span className="nav-item-icon">💬</span>
+            <span className="nav-item-icon"><MessageSquare size={16} /></span>
             <span className="nav-item-label">Chat</span>
           </button>
           <button
             className={`nav-item ${activePanel === "semantic" ? "active" : ""}`}
             onClick={() => setActivePanel("semantic")}
           >
-            <span className="nav-item-icon">📖</span>
+            <span className="nav-item-icon"><BookOpen size={16} /></span>
             <span className="nav-item-label">Data Dictionary</span>
           </button>
           <button
             className={`nav-item ${activePanel === "preview" ? "active" : ""}`}
             onClick={() => setActivePanel("preview")}
           >
-            <span className="nav-item-icon">🔍</span>
+            <span className="nav-item-icon"><Search size={16} /></span>
             <span className="nav-item-label">Data Preview</span>
           </button>
         </div>
@@ -180,7 +218,7 @@ export default function App() {
             className="new-file-btn"
             onClick={() => { setSession(null); setMessages([]); setActivePanel("dashboard"); }}
           >
-            <span>+</span> <span>New dataset</span>
+            <Plus size={14} /> <span>New dataset</span>
           </button>
         </div>
       </aside>
@@ -190,6 +228,7 @@ export default function App() {
           <AutoDashboard
             session={session}
             onStartChat={(q) => handleAsk(q)}
+            onGoToDict={() => setActivePanel("semantic")}
           />
         )}
 

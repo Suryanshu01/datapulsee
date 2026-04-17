@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { LayoutDashboard } from "lucide-react";
 import ChartRenderer from "./charts/ChartRenderer";
 import KPIRow from "./charts/KPIRow";
 import WaterfallChart from "./charts/WaterfallChart";
@@ -84,7 +85,7 @@ export default function ChatInterface({ messages, onAsk, loading, semanticLayer,
             onClick={onGoToDashboard}
             style={{ fontSize: 13, padding: "4px 10px", marginRight: 8 }}
           >
-            📊 Overview
+            <LayoutDashboard size={14} style={{ marginRight: 4 }} /> Overview
           </button>
         )}
         <span className="mode-bar-label">Mode:</span>
@@ -157,7 +158,7 @@ export default function ChatInterface({ messages, onAsk, loading, semanticLayer,
           disabled={loading}
         />
         <button className="send-btn" type="submit" disabled={loading || !input.trim()}>
-          &rarr;
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
         </button>
       </form>
     </div>
@@ -210,6 +211,31 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
     );
   }
 
+  if (msg.role === "error") {
+    return (
+      <div className="assistant-message">
+        <div className="error-card">
+          <div className="error-card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            {msg.content}
+          </div>
+          {msg.errorDetail && (
+            <div className="error-card-detail">{msg.errorDetail}</div>
+          )}
+          <div className="error-card-actions">
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 13, padding: "6px 14px" }}
+              onClick={() => onAsk(msg.originalQuestion, mode)}
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (msg.role === "clarification") {
     return (
       <div className="assistant-message">
@@ -228,6 +254,20 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
   // Assistant — visual-first hierarchy
   return (
     <div className="assistant-message">
+      {/* Intent classification badge */}
+      {msg.intent && (
+        <div className="intent-tag-row">
+          <span className={`intent-tag intent-tag-${msg.intent}`}>
+            {msg.intent === "change" && "🔄 "}
+            {msg.intent === "compare" && "⚖️ "}
+            {msg.intent === "breakdown" && "📊 "}
+            {msg.intent === "summary" && "📋 "}
+            {msg.intent === "general" && "💡 "}
+            {msg.intent.charAt(0).toUpperCase() + msg.intent.slice(1)} Analysis
+          </span>
+        </div>
+      )}
+
       {/* 0. Verdict (compare intent) */}
       {msg.verdict && (
         <div style={{
@@ -279,6 +319,38 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
           animation: "fadeSlideIn 400ms ease-out 600ms both",
         }}>
           {msg.actionInsight}
+        </div>
+      )}
+
+      {/* Trust signals — always visible */}
+      {msg.sql && (
+        <div className="trust-badges-row">
+          {msg.queryValidated && (
+            <span className="trust-badge trust-badge-success">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+              Query validated
+            </span>
+          )}
+          {msg.confidence && (
+            <span className={`trust-badge trust-badge-${msg.confidence.level === "high" ? "success" : msg.confidence.level === "medium" ? "warning" : "danger"}`}>
+              Confidence: {msg.confidence.level}
+            </span>
+          )}
+          {msg.coveragePct != null && (
+            <span className="trust-badge trust-badge-neutral">
+              Coverage: {msg.coveragePct}%
+            </span>
+          )}
+          {msg.intent && (
+            <span className="trust-badge trust-badge-intent">
+              {msg.intent}
+            </span>
+          )}
+          {msg.retried && (
+            <span className="trust-badge trust-badge-warning">
+              Self-corrected
+            </span>
+          )}
         </div>
       )}
 
@@ -405,14 +477,37 @@ function CopyButton({ msg }) {
   );
 }
 
-/* ── Loading indicator (skeleton bars) ──────────────────────── */
+/* ── Loading indicator (step-by-step thinking) ───────────────── */
 function LoadingMessage() {
+  const steps = [
+    { icon: "🔍", text: "Understanding your question..." },
+    { icon: "📐", text: "Selecting relevant metrics & dimensions..." },
+    { icon: "🔧", text: "Writing SQL query..." },
+    { icon: "⚡", text: "Executing against your dataset..." },
+    { icon: "✍️", text: "Generating explanation..." },
+  ];
+  const [visibleCount, setVisibleCount] = useState(0);
+
+  useEffect(() => {
+    setVisibleCount(1);
+    const timers = steps.slice(1).map((_, i) =>
+      setTimeout(() => setVisibleCount(i + 2), (i + 1) * 900)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
   return (
     <div className="assistant-message">
-      <div className="skeleton-msg">
-        <div className="skeleton-bar" />
-        <div className="skeleton-bar" />
-        <div className="skeleton-bar" />
+      <div className="thinking-steps">
+        {steps.slice(0, visibleCount).map((step, i) => (
+          <div
+            key={i}
+            className={`thinking-step ${i === visibleCount - 1 ? "active" : "done"}`}
+          >
+            <span className="thinking-icon">{i < visibleCount - 1 ? "✓" : step.icon}</span>
+            <span className="thinking-text">{step.text}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { BarChart3, Newspaper } from "lucide-react";
 import ChartRenderer from "./charts/ChartRenderer";
 import KPIRow from "./charts/KPIRow";
 import { formatNumber } from "../utils/formatNumber";
@@ -12,11 +13,12 @@ const STARTER_QUESTIONS = [
   "Give me a summary",
 ];
 
-export default function AutoDashboard({ session, onStartChat }) {
+export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [story, setStory] = useState(null);
   const [input, setInput] = useState("");
+  const [showBanner, setShowBanner] = useState(true);
   const topRef = useRef(null);
 
   // Scroll to top whenever the dashboard is shown
@@ -53,14 +55,28 @@ export default function AutoDashboard({ session, onStartChat }) {
   const kpiCards = dashboard.kpis
     .filter((k) => k.name.startsWith("total_"))
     .slice(0, 6)
-    .map((k) => ({
-      label: k.name.replace(/^total_/, "").replace(/_/g, " "),
-      value: k.total,
-      formatted: formatNumber(k.total),
-      min: k.min,
-      max: k.max,
-      sparkline_data: k.sparkline?.length > 1 ? k.sparkline : undefined,
-    }));
+    .map((k) => {
+      let delta = undefined;
+      let deltaLabel = undefined;
+      if (k.sparkline?.length >= 2) {
+        const prev = k.sparkline[k.sparkline.length - 2];
+        const curr = k.sparkline[k.sparkline.length - 1];
+        if (prev !== 0) {
+          delta = Math.round(((curr - prev) / Math.abs(prev)) * 100);
+          deltaLabel = "vs prior period";
+        }
+      }
+      return {
+        label: k.name.replace(/^total_/, "").replace(/_/g, " "),
+        value: k.total,
+        formatted: formatNumber(k.total),
+        delta,
+        deltaLabel,
+        min: k.min,
+        max: k.max,
+        sparkline_data: k.sparkline?.length > 1 ? k.sparkline : undefined,
+      };
+    });
 
   // Time trend chart config
   const trendData = dashboard.time_trend?.data?.map((r) => ({
@@ -85,7 +101,7 @@ export default function AutoDashboard({ session, onStartChat }) {
 
       {/* ── Section A: Overview Bar ─────────────────────────────── */}
       <div className="dashboard-overview">
-        <span style={{ fontSize: 16 }}>📊</span>
+        <BarChart3 size={16} color="var(--primary)" />
         <span style={{ fontWeight: 600, color: "#1A1A2E" }}>
           {dashboard.filename}
         </span>
@@ -99,6 +115,25 @@ export default function AutoDashboard({ session, onStartChat }) {
       </div>
 
       <div className="dashboard-body">
+        {/* ── Semantic layer banner ───────────────────────────────── */}
+        {showBanner && (
+          <div className="semantic-banner">
+            <div className="semantic-banner-content">
+              <span style={{ fontSize: 16 }}>✨</span>
+              <span>
+                DataPulse auto-detected{" "}
+                <strong>{session?.semantic_layer?.metrics?.length || 0} metrics</strong>,{" "}
+                <strong>{session?.semantic_layer?.dimensions?.length || 0} dimensions</strong>, and{" "}
+                <strong>{session?.semantic_layer?.time_dimensions?.length || 0} time dimension{(session?.semantic_layer?.time_dimensions?.length || 0) !== 1 ? "s" : ""}</strong>.{" "}
+              </span>
+              <button className="semantic-banner-link" onClick={onGoToDict}>
+                View Data Dictionary →
+              </button>
+            </div>
+            <button className="semantic-banner-close" onClick={() => setShowBanner(false)}>✕</button>
+          </div>
+        )}
+
         {/* ── Section A2: Data Story ──────────────────────────────── */}
         {story && story.length > 0 && (
           <div style={{
@@ -118,7 +153,7 @@ export default function AutoDashboard({ session, onStartChat }) {
               fontWeight: 600,
               color: "#1A1A2E",
             }}>
-              <span style={{ fontSize: 18 }}>📰</span>
+              <Newspaper size={16} color="var(--text)" />
               Here's what your data tells us
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -192,7 +227,7 @@ export default function AutoDashboard({ session, onStartChat }) {
               placeholder="Ask a question about your data..."
             />
             <button className="send-btn" type="submit" disabled={!input.trim()}>
-              &rarr;
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
             </button>
           </form>
           <div className="dash-suggestions">

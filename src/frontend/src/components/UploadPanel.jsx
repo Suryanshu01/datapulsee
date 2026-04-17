@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { Upload, Shield, MessageSquareText, BarChart3 } from "lucide-react";
 
 const SAMPLES = [
   { name: "SME Lending",      filename: "sme_lending.csv",     desc: "18 months of loan applications, approvals & defaults across 4 regions", icon: "🏦" },
@@ -7,9 +8,9 @@ const SAMPLES = [
 ];
 
 const FEATURES = [
-  { icon: "💬", title: "Ask in plain English",     desc: "No SQL or formulas needed. Ask questions just like you'd ask a colleague." },
-  { icon: "📊", title: "Instant visualisations",   desc: "Charts and tables appear automatically, tailored to your question." },
-  { icon: "🔒", title: "Completely private",        desc: "Your data never leaves your device. Everything runs locally on your machine." },
+  { icon: <MessageSquareText size={20} color="var(--primary)" />, title: "Ask in plain English", desc: "No SQL or formulas needed. Ask questions just like you'd ask a colleague." },
+  { icon: <BarChart3 size={20} color="var(--primary)" />, title: "Instant visualisations", desc: "Charts and tables appear automatically, tailored to your question." },
+  { icon: <Shield size={20} color="var(--primary)" />, title: "Completely private", desc: "Your data never leaves your device. Everything runs locally on your machine." },
 ];
 
 export default function UploadPanel({ onUpload, onSampleLoad, loading }) {
@@ -45,7 +46,7 @@ export default function UploadPanel({ onUpload, onSampleLoad, loading }) {
           </div>
         ) : (
           <>
-            <div className="upload-icon-circle">📂</div>
+            <div className="upload-icon-circle"><Upload size={22} color="var(--primary)" /></div>
             <h3>Drop your CSV file here</h3>
             <p>or click anywhere to browse your files</p>
             <span className="upload-hint">Supports CSV and TSV · Any size</span>

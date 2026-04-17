@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import logging
 
-from utils.gemini_client import generate
+from utils.llm_client import generate
 
 logger = logging.getLogger(__name__)
 

@@ -53,7 +53,7 @@ export default function WaterfallChart({ drivers, comparison }) {
             <LabelList
               dataKey="label"
               position="right"
-              style={{ fontSize: 11, fill: '#4B5563' }}
+              style={{ fontSize: 11, fontWeight: 600, fill: 'var(--text, #1A1A2E)' }}
             />
           </Bar>
         </BarChart>
