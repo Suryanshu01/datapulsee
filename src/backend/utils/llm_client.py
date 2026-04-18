@@ -23,6 +23,14 @@ _MAX_RETRIES = 2
 _RETRY_DELAY_SECONDS = 10
 
 
+def _sanitize_text_for_utf8(text: str) -> str:
+    """Replace UTF-16 surrogate code points that cannot be UTF-8 encoded."""
+    return "".join(
+        "?" if 0xD800 <= ord(ch) <= 0xDFFF else ch
+        for ch in text
+    )
+
+
 def _get_client() -> Groq:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
@@ -41,13 +49,14 @@ def generate(prompt: str) -> str:
     attempts. Raises HTTP 502 if all retries are exhausted.
     """
     client = _get_client()
+    safe_prompt = _sanitize_text_for_utf8(prompt)
     last_error: Exception | None = None
 
     for attempt in range(_MAX_RETRIES + 1):  # 0 = initial attempt, 1..N = retries
         try:
             response = client.chat.completions.create(
                 model=_GROQ_MODEL,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": safe_prompt}],
                 temperature=0.1,
             )
             return response.choices[0].message.content.strip()

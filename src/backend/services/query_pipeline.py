@@ -447,7 +447,7 @@ Return ONLY valid JSON (no markdown fences):
 {{
   "explanation": "3-5 sentences explaining the results in plain English. Be specific with numbers.",
   "insight_line": "One bold sentence summarizing the KEY finding (max 15 words)",
-  "action_insight": "\ud83d\udca1 Consider... (one actionable sentence under 20 words, specific to the data)",
+    "action_insight": "ACTION: Consider... (one actionable sentence under 20 words, specific to the data)",
   "verdict": "null or one sentence declaring a winner with specific numbers (compare intent only)",
   "chart_type": "bar|grouped_bar|line|area|donut|kpi|waterfall|table",
   "chart_config": {{
@@ -472,12 +472,12 @@ Return ONLY valid JSON (no markdown fences):
 }}
 
 Rules for action_insight:
-- Start with "\ud83d\udca1 Consider..." or "\ud83d\udca1 This suggests..." or "\ud83d\udca1 Look into..."
+- Start with "ACTION: Consider..." or "ACTION: This suggests..." or "ACTION: Look into..."
 - Be specific to the data — reference an actual number or group
 - Must be actionable (something the user can do)
 - Keep it under 20 words
-- Bad: "\ud83d\udca1 Keep monitoring the data" (too vague)
-- Good: "\ud83d\udca1 Consider tightening approval criteria in South — default rates are 2x the average"
+- Bad: "ACTION: Keep monitoring the data" (too vague)
+- Good: "ACTION: Consider tightening approval criteria in South — default rates are 2x the average"
 
 CHART SELECTION RULES:
 - "change" intent -> "waterfall" or "bar" (show drivers of change)
