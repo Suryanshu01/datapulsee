@@ -98,14 +98,14 @@ export default function ChatInterface({ messages, onAsk, loading, semanticLayer,
             {m.label}
           </button>
         ))}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, padding: "4px", background: "#F3F4F6", borderRadius: 20 }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, padding: "4px", background: "var(--surface-2)", borderRadius: 20 }}>
           <button
             onClick={() => setSimpleMode(true)}
             style={{
               padding: "4px 12px", borderRadius: 16, border: "none", fontSize: 12, fontWeight: 500,
               cursor: "pointer", fontFamily: "inherit",
-              background: simpleMode ? "#42145F" : "transparent",
-              color: simpleMode ? "white" : "#6B7280",
+              background: simpleMode ? "var(--primary)" : "transparent",
+              color: simpleMode ? "white" : "var(--text-2)",
               transition: "all 0.15s",
             }}
           >
@@ -116,8 +116,8 @@ export default function ChatInterface({ messages, onAsk, loading, semanticLayer,
             style={{
               padding: "4px 12px", borderRadius: 16, border: "none", fontSize: 12, fontWeight: 500,
               cursor: "pointer", fontFamily: "inherit",
-              background: !simpleMode ? "#42145F" : "transparent",
-              color: !simpleMode ? "white" : "#6B7280",
+              background: !simpleMode ? "var(--primary)" : "transparent",
+              color: !simpleMode ? "white" : "var(--text-2)",
               transition: "all 0.15s",
             }}
           >
@@ -176,7 +176,7 @@ function WelcomeScreen({ onAsk, mode }) {
       <div className="suggestion-grid">
         {SUGGESTION_CATEGORIES.map((cat) => (
           <div key={cat.id} className="suggestion-category-card">
-            <div className="suggestion-cat-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: "#1A1A2E" }}>
+            <div className="suggestion-cat-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: "var(--text)" }}>
               {cat.label}
             </div>
             {cat.questions.map((q) => (
@@ -271,9 +271,9 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
       {/* 0. Verdict (compare intent) */}
       {msg.verdict && (
         <div style={{
-          fontSize: 15, fontWeight: 600, color: "#1A1A2E",
-          padding: "12px 16px", background: "#F0ECFA", borderRadius: 8,
-          marginBottom: 12, borderLeft: "4px solid #42145F",
+          fontSize: 15, fontWeight: 600, color: "var(--text)",
+          padding: "12px 16px", background: "var(--primary-bg)", borderRadius: 8,
+          marginBottom: 12, borderLeft: "4px solid var(--primary)",
         }}>
           {msg.verdict}
         </div>
@@ -313,9 +313,9 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
       {/* 4b. Action insight */}
       {msg.actionInsight && (
         <div style={{
-          background: "#FEF9EE", border: "1px solid #FDE68A", borderRadius: 8,
+          background: "var(--warning-bg)", border: "1px solid rgba(212,118,10,0.2)", borderRadius: 8,
           padding: "10px 14px", marginTop: 12, fontSize: 14, fontWeight: 500,
-          color: "#92400E", lineHeight: 1.5,
+          color: "var(--warning)", lineHeight: 1.5,
           animation: "fadeSlideIn 400ms ease-out 600ms both",
         }}>
           {msg.actionInsight}
@@ -349,6 +349,18 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
           {msg.retried && (
             <span className="trust-badge trust-badge-warning">
               Self-corrected
+            </span>
+          )}
+          {msg.verification && (
+            <span className={`trust-badge ${msg.verification === "verified" ? "trust-badge-success" : "trust-badge-neutral"}`}>
+              {msg.verification === "verified" ? (
+                <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Answer verified</>
+              ) : "Plausible result"}
+            </span>
+          )}
+          {msg.responseTime && (
+            <span className="trust-badge trust-badge-neutral">
+              ⚡ {msg.responseTime}s
             </span>
           )}
         </div>
@@ -436,7 +448,7 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
                 )}
               </div>
             )}
-            <p style={{ marginTop: 8, marginBottom: 4, fontSize: 11, color: "#6B7280" }}>SQL</p>
+            <p style={{ marginTop: 8, marginBottom: 4, fontSize: 11, color: "var(--text-2)" }}>SQL</p>
             <code>{msg.sql}</code>
           </div>
         </details>

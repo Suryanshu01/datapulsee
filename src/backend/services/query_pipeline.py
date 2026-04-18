@@ -37,6 +37,7 @@ def run_analyst(
     question: str,
     semantic_layer: dict[str, Any],
     mode: str,
+    conversation_history: list[dict] | None = None,
 ) -> dict[str, Any]:
     """
     Agent 1 classifies intent, selects relevant metrics/dimensions, and
@@ -56,6 +57,13 @@ def run_analyst(
     }
     mode_hint = mode_hints.get(mode, mode_hints["auto"])
 
+    conv_context = ""
+    if conversation_history:
+        conv_parts = []
+        for entry in conversation_history[-3:]:
+            conv_parts.append(f'  Q: "{entry.get("question", "")}"\n  -> Intent: {entry.get("intent", "unknown")}, Metrics: {entry.get("metrics", [])}')
+        conv_context = "PREVIOUS CONVERSATION:\n" + "\n".join(conv_parts) + "\n\n"
+
     prompt = f"""You are Agent 1 (The Analyst) in a two-agent data analysis pipeline.
 
 Your job: understand the user's question, pick the right metrics and dimensions from the semantic layer, and create a plan for the SQL Writer agent.
@@ -66,12 +74,13 @@ SEMANTIC LAYER:
 USER QUESTION: "{question}"
 MODE HINT: {mode_hint}
 
-INSTRUCTIONS:
+{conv_context}INSTRUCTIONS:
 1. Classify the intent as one of: change | compare | breakdown | summary | general
 2. Select ONLY the metrics and dimensions relevant to answering this question
 3. Identify the time dimension if the question involves temporal analysis
 4. Write a clear plan describing what SQL should compute
 5. If the question is ambiguous (e.g. "best product" - best by what?), set needs_clarification to true and provide a clarifying question with 2-4 clickable options
+6. If there is previous conversation context, resolve pronouns like "that", "it", "this" using the metrics and dimensions from previous questions.
 
 Return ONLY valid JSON (no markdown fences):
 {{
@@ -563,6 +572,7 @@ def run_pipeline(
     conn: duckdb.DuckDBPyConnection,
     total_rows_in_dataset: int,
     simple_mode: bool = True,
+    conversation_history: list[dict] | None = None,
 ) -> dict[str, Any]:
     """
     Run the full three-agent pipeline:
@@ -575,7 +585,7 @@ def run_pipeline(
     Returns a complete response dict ready for the API.
     """
     # Step 1: Analyst
-    analyst_result = run_analyst(question, semantic_layer, mode)
+    analyst_result = run_analyst(question, semantic_layer, mode, conversation_history=conversation_history)
 
     # Handle disambiguation
     if analyst_result.get("needs_clarification"):
@@ -695,6 +705,33 @@ def run_pipeline(
         simple_mode=simple_mode,
     )
 
+    # Step 5b: Answer Verification — cross-check primary KPI against raw data
+    verification_status = None
+    if explainer_result.get("kpis") and intent != "change":
+        try:
+            first_kpi = explainer_result["kpis"][0]
+            kpi_value = first_kpi.get("value")
+            if kpi_value is not None and isinstance(kpi_value, (int, float)):
+                primary_metric_col = None
+                for m_name in analyst_result.get("relevant_metrics", []):
+                    for m in semantic_layer.get("metrics", []):
+                        if m.get("name") == m_name:
+                            primary_metric_col = m.get("column")
+                            break
+                    if primary_metric_col:
+                        break
+                if primary_metric_col:
+                    verify_result = conn.execute(f'SELECT SUM("{primary_metric_col}") FROM {table_name}').fetchone()
+                    if verify_result and verify_result[0] is not None:
+                        verified_total = float(verify_result[0])
+                        if kpi_value != 0:
+                            deviation = abs(verified_total - kpi_value) / abs(kpi_value)
+                            verification_status = "verified" if deviation < 0.05 else "plausible"
+                        else:
+                            verification_status = "plausible"
+        except Exception:
+            verification_status = "skipped"
+
     # Step 6: Metrics matching (for transparency — enriched with expr)
     metrics_used = _find_matched_metrics_enriched(question, semantic_layer, analyst_result)
 
@@ -736,6 +773,7 @@ def run_pipeline(
         "cached": False,
         "action_insight": explainer_result.get("action_insight"),
         "verdict": explainer_result.get("verdict"),
+        "verification": verification_status,
     }
 
 

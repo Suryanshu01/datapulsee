@@ -24,6 +24,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from services.schema_analyzer import analyze_schema
 from services.semantic_engine import generate_semantic_layer
+from services.pii_detector import scan_for_pii, sanitize_semantic_layer
 from utils.duckdb_manager import create_session
 
 router = APIRouter()
@@ -33,7 +34,7 @@ router = APIRouter()
 # working directory the server is started from.
 _SAMPLES_DIR = Path(__file__).resolve().parents[3] / "assets" / "samples"
 
-_ALLOWED_EXTENSIONS = (".csv", ".tsv")
+_ALLOWED_EXTENSIONS = (".csv", ".tsv", ".xlsx")
 
 
 @router.post("/api/upload")
@@ -64,10 +65,19 @@ async def upload_dataset(file: UploadFile = File(...)) -> dict:
         tmp.write(content)
         tmp_path = tmp.name
 
-    conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM read_csv_auto('{tmp_path}')")
+    if file.filename.endswith(".xlsx"):
+        import pandas as pd
+        df = pd.read_excel(tmp_path, engine="openpyxl")
+        conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
+    else:
+        conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM read_csv_auto('{tmp_path}')")
 
     schema, stats, sample, row_count = analyze_schema(conn, table_name)
     semantic_layer = await generate_semantic_layer(schema, sample, stats)
+
+    pii_columns = scan_for_pii(conn, schema)
+    if pii_columns:
+        semantic_layer = sanitize_semantic_layer(semantic_layer, pii_columns)
 
     create_session(
         session_id=session_id,
@@ -86,6 +96,7 @@ async def upload_dataset(file: UploadFile = File(...)) -> dict:
         "sample": sample,
         "stats": stats,
         "semantic_layer": semantic_layer,
+        "pii_columns": pii_columns,
     }
 
 
@@ -126,6 +137,10 @@ async def load_sample(filename: str) -> dict:
     schema, stats, sample, row_count = analyze_schema(conn, table_name)
     semantic_layer = await generate_semantic_layer(schema, sample, stats)
 
+    pii_columns = scan_for_pii(conn, schema)
+    if pii_columns:
+        semantic_layer = sanitize_semantic_layer(semantic_layer, pii_columns)
+
     create_session(
         session_id=session_id,
         conn=conn,
@@ -143,4 +158,5 @@ async def load_sample(filename: str) -> dict:
         "sample": sample,
         "stats": stats,
         "semantic_layer": semantic_layer,
+        "pii_columns": pii_columns,
     }

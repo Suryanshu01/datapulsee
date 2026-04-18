@@ -19,6 +19,7 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
   const [story, setStory] = useState(null);
   const [input, setInput] = useState("");
   const [showBanner, setShowBanner] = useState(true);
+  const [insights, setInsights] = useState([]);
   const topRef = useRef(null);
 
   // Scroll to top whenever the dashboard is shown
@@ -39,6 +40,11 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
       .then((r) => r.json())
       .then((d) => setStory(d.story))
       .catch(() => setStory(null));
+    // Fetch proactive insights
+    fetch(`${API}/api/insights/${session.session_id}`)
+      .then((r) => r.json())
+      .then((d) => setInsights(d.insights || []))
+      .catch(() => setInsights([]));
   }, [session?.session_id]);
 
   const handleSubmit = (e) => {
@@ -102,7 +108,7 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
       {/* ── Section A: Overview Bar ─────────────────────────────── */}
       <div className="dashboard-overview">
         <BarChart3 size={16} color="var(--primary)" />
-        <span style={{ fontWeight: 600, color: "#1A1A2E" }}>
+        <span style={{ fontWeight: 600, color: "var(--text)" }}>
           {dashboard.filename}
         </span>
         <span className="dash-pill">{dashboard.row_count?.toLocaleString()} rows</span>
@@ -134,11 +140,21 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
           </div>
         )}
 
+        {/* ── PII Banner ─────────────────────────────────────────── */}
+        {session?.pii_columns?.length > 0 && (
+          <div className="pii-banner">
+            <div className="pii-banner-content">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span><strong>{session.pii_columns.length} column{session.pii_columns.length > 1 ? "s" : ""} flagged as potentially sensitive</strong> — {session.pii_columns.map((p) => p.column).join(", ")}. Sample values excluded from AI prompts.</span>
+            </div>
+          </div>
+        )}
+
         {/* ── Section A2: Data Story ──────────────────────────────── */}
         {story && story.length > 0 && (
           <div style={{
-            background: "#FFFFFF",
-            border: "1px solid #E5E7EB",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
             borderRadius: 12,
             padding: "20px 24px",
             marginBottom: 20,
@@ -151,7 +167,7 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
               marginBottom: 12,
               fontSize: 15,
               fontWeight: 600,
-              color: "#1A1A2E",
+              color: "var(--text)",
             }}>
               <Newspaper size={16} color="var(--text)" />
               Here's what your data tells us
@@ -163,11 +179,11 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
                   style={{
                     fontSize: 14,
                     lineHeight: 1.6,
-                    color: "#374151",
+                    color: "var(--text)",
                     paddingLeft: 16,
                     borderLeft: i === story.length - 1
-                      ? "3px solid #D4760A"
-                      : "3px solid #E5E7EB",
+                      ? "3px solid var(--warning)"
+                      : "3px solid var(--border)",
                     animation: `fadeSlideIn 400ms ease-out ${i * 100}ms both`,
                   }}
                 >
@@ -176,6 +192,43 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
               ))}
             </div>
           </div>
+        )}
+
+        {/* ── Data Quality Badge ──────────────────────────────────── */}
+        {insights.filter((ins) => ins.type === "data_quality_score").map((dq, i) => (
+          <div key={i} className="data-quality-badge">
+            <span className={`dq-score ${dq.quality_pct >= 95 ? "dq-good" : dq.quality_pct >= 80 ? "dq-ok" : "dq-bad"}`}>{dq.quality_pct}%</span>
+            <span className="dq-label">Data Quality</span>
+            <span className="dq-detail">{dq.description}</span>
+          </div>
+        ))}
+
+        {/* ── Insights Feed ────────────────────────────────────────── */}
+        {insights.filter((ins) => ins.type !== "data_quality_score").length > 0 && (
+          <section className="dash-section">
+            <div className="dash-section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16 }}>💡</span>
+              Data Talks to You
+              <span style={{ fontSize: 12, fontWeight: 400, color: "var(--text-3)", marginLeft: 4 }}>
+                {insights.filter((ins) => ins.type !== "data_quality_score").length} insight{insights.filter((ins) => ins.type !== "data_quality_score").length !== 1 ? "s" : ""} found — pure statistics, no AI
+              </span>
+            </div>
+            <div className="insights-grid">
+              {insights.filter((ins) => ins.type !== "data_quality_score").map((insight, i) => (
+                <div key={i} className={`insight-card insight-${insight.severity}`} style={{ animationDelay: `${i * 80}ms` }}>
+                  <div className="insight-card-header">
+                    <span>{insight.severity === "high" ? "⚠️" : insight.severity === "medium" ? "📊" : "💡"}</span>
+                    <span className="insight-card-type">{insight.type.replace(/_/g, " ")}</span>
+                  </div>
+                  <div className="insight-card-title">{insight.title}</div>
+                  <div className="insight-card-desc">{insight.description}</div>
+                  {insight.suggested_question && (
+                    <button className="insight-dive-btn" onClick={() => onStartChat(insight.suggested_question)}>Dive deeper →</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
         {/* ── Section B: KPI Cards ────────────────────────────────── */}
@@ -231,7 +284,7 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
             </button>
           </form>
           <div className="dash-suggestions">
-            <span style={{ fontSize: 13, color: "#9CA3AF" }}>Or try:</span>
+            <span style={{ fontSize: 13, color: "var(--text-3)" }}>Or try:</span>
             {STARTER_QUESTIONS.map((q) => (
               <button
                 key={q}

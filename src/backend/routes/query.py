@@ -53,6 +53,7 @@ async def ask_question(req: QuestionRequest) -> QueryResponse:
         conn=session["conn"],
         total_rows_in_dataset=session["row_count"],
         simple_mode=req.simple_mode,
+        conversation_history=req.conversation_history,
     )
 
     # Cache the result (unless it's a clarification request)

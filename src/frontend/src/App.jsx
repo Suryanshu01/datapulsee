@@ -14,6 +14,7 @@ export default function App() {
   const [loading, setLoading]         = useState(false);
   const [activePanel, setActivePanel] = useState("dashboard"); // dashboard | chat | semantic | preview
   const [theme, setTheme] = useState("light");
+  const [conversationHistory, setConversationHistory] = useState([]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -56,11 +57,12 @@ export default function App() {
     setActivePanel("chat");
     setMessages((prev) => [...prev, { role: "user", content: question }]);
     setLoading(true);
+    const startTime = Date.now();
     try {
       const res = await fetch(`${API}/api/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: session.session_id, question, mode, simple_mode: simpleMode }),
+        body: JSON.stringify({ session_id: session.session_id, question, mode, simple_mode: simpleMode, conversation_history: conversationHistory.slice(-3) }),
       });
       if (!res.ok) { const e = await res.json().catch(() => null); throw new Error(e?.detail || res.statusText); }
       const data = await res.json();
@@ -97,6 +99,13 @@ export default function App() {
           cached: data.cached,
           actionInsight: data.action_insight,
           verdict: data.verdict,
+          responseTime: ((Date.now() - startTime) / 1000).toFixed(1),
+          verification: data.verification,
+        }]);
+        setConversationHistory((prev) => [...prev, {
+          question,
+          intent: data.intent,
+          metrics: (data.metrics_used || []).map((m) => typeof m === "string" ? m : m.name),
         }]);
       }
     } catch (err) {
@@ -216,7 +225,7 @@ export default function App() {
           </div>
           <button
             className="new-file-btn"
-            onClick={() => { setSession(null); setMessages([]); setActivePanel("dashboard"); }}
+            onClick={() => { setSession(null); setMessages([]); setActivePanel("dashboard"); setConversationHistory([]); }}
           >
             <Plus size={14} /> <span>New dataset</span>
           </button>

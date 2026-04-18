@@ -22,6 +22,9 @@ class QuestionRequest(BaseModel):
         default=True,
         description="When True, use plain English. When False, use precise business language.",
     )
+    conversation_history: list[dict[str, Any]] = Field(
+        default=[], description="Last 2-3 Q&A pairs for context resolution",
+    )
 
 
 class SemanticUpdate(BaseModel):
@@ -84,3 +87,4 @@ class QueryResponse(BaseModel):
     cached: bool = False
     action_insight: Optional[str] = None
     verdict: Optional[str] = None
+    verification: Optional[str] = None

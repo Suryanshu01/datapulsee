@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException
 
 from utils.duckdb_manager import get_session
 from utils.llm_client import generate
+from services.insights_engine import generate_insights
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -311,6 +312,20 @@ Return ONLY the 5 bullets, each starting with \u2022. No intro text, no conclusi
         bullets = ["Story could not be generated. Ask a question to explore your data."]
 
     return {"story": bullets}
+
+
+@router.get("/api/insights/{session_id}")
+async def get_insights(session_id: str) -> dict:
+    """Proactive insights — anomalies, concentrations, trend reversals, data quality, correlations. All deterministic."""
+    session = get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    try:
+        insights = generate_insights(session["conn"], session["semantic_layer"])
+    except Exception as exc:
+        logger.warning("Insights generation failed: %s", exc)
+        insights = []
+    return {"insights": insights}
 
 
 def _safe_float(val) -> float:
