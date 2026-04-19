@@ -1,8 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, Cell, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 import { formatNumber } from '../../utils/formatNumber';
 
-const POSITIVE_COLOR = '#0F7B3F';
-const NEGATIVE_COLOR = '#C4314B';
+const POSITIVE_COLOR = 'var(--success)';
+const NEGATIVE_COLOR = 'var(--danger)';
 
 export default function WaterfallChart({ drivers, comparison }) {
   if (!drivers || !drivers.length) return null;
@@ -17,7 +17,7 @@ export default function WaterfallChart({ drivers, comparison }) {
   return (
     <div style={{ margin: '16px 0' }}>
       {comparison && (
-        <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>
           Comparing {comparison}
         </div>
       )}
@@ -27,7 +27,7 @@ export default function WaterfallChart({ drivers, comparison }) {
           <YAxis
             type="category"
             dataKey="name"
-            tick={{ fontSize: 13, fill: '#1A1A2E' }}
+            tick={{ fontSize: 13, fill: 'var(--text)' }}
             axisLine={false}
             tickLine={false}
             width={70}
@@ -35,10 +35,11 @@ export default function WaterfallChart({ drivers, comparison }) {
           <Tooltip
             formatter={(v) => formatNumber(v)}
             contentStyle={{
-              background: '#fff',
-              border: '1px solid #E5E7EB',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
               borderRadius: 6,
               fontSize: 12,
+              color: 'var(--text)',
             }}
           />
           <Bar

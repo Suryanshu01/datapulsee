@@ -44,7 +44,7 @@ export default function KPICard({ label, value, formatted, delta, deltaLabel, sp
         </div>
       )}
       {(minVal != null || maxVal != null) && (
-        <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>
+        <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4, fontFamily: "var(--font-mono)", letterSpacing: "0.04em" }}>
           {minVal != null && `Min ${formatNumber(minVal)}`}
           {minVal != null && maxVal != null && " · "}
           {maxVal != null && `Max ${formatNumber(maxVal)}`}

@@ -13,7 +13,7 @@ export default function App() {
   const [messages, setMessages]       = useState([]);
   const [loading, setLoading]         = useState(false);
   const [activePanel, setActivePanel] = useState("dashboard"); // dashboard | chat | semantic | preview
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState("dark");
   const [conversationHistory, setConversationHistory] = useState([]);
 
   useEffect(() => {
@@ -166,6 +166,7 @@ export default function App() {
         <div className="sidebar-logo">
           <div className="logo-mark">DP</div>
           <span className="logo-name">DataPulse</span>
+          <span className="sidebar-model">groq · llama-3.1-8b</span>
         </div>
 
         <button

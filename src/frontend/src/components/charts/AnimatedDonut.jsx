@@ -4,8 +4,8 @@ import {
 
 const COLORS = ["#42145F", "#6B4C8A", "#0F7B3F", "#D4760A", "#3B82F6", "#C4314B", "#8B5CF6", "#059669"];
 const TIP = {
-  backgroundColor: "#fff", border: "1px solid #E5E7EB",
-  borderRadius: 6, color: "#1A1A2E", fontSize: 12,
+  backgroundColor: "var(--surface-2)", border: "1px solid var(--border)",
+  borderRadius: 6, color: "var(--text)", fontSize: 12,
 };
 
 export default function AnimatedDonut({ data, config }) {
@@ -45,7 +45,7 @@ export default function AnimatedDonut({ data, config }) {
             ))}
           </Pie>
           <Tooltip contentStyle={TIP} />
-          <Legend wrapperStyle={{ fontSize: 12, color: "#6B7280" }} />
+          <Legend wrapperStyle={{ fontSize: 12, color: "var(--text-3)" }} />
         </PieChart>
       </ResponsiveContainer>
     </div>

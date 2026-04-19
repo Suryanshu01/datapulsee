@@ -4,10 +4,10 @@ import {
 
 const COLORS = ["#42145F", "#6B4C8A", "#0F7B3F", "#C4314B", "#D4760A", "#3B82F6"];
 const TIP = {
-  backgroundColor: "#fff", border: "1px solid #E5E7EB",
-  borderRadius: 6, color: "#1A1A2E", fontSize: 12,
+  backgroundColor: "var(--surface-2)", border: "1px solid var(--border)",
+  borderRadius: 6, color: "var(--text)", fontSize: 12,
 };
-const AXIS = { fill: "#6B7280", fontSize: 11 };
+const AXIS = { fill: "var(--text-3)", fontSize: 11 };
 
 export default function AnimatedBar({ data, config }) {
   if (!data?.length || !config?.x || !config?.y) return null;

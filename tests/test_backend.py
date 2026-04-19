@@ -295,6 +295,89 @@ def test_pipeline_find_matched_metrics_by_synonym():
     assert "total_disbursed" in matched_names
 
 
+def test_pipeline_auto_fix_groupby_error_numeric_column():
+    from services.query_pipeline import _auto_fix_group_by_projection_error
+
+    sql = (
+        'SELECT "region", AVG("approvals") AS total_approvals, '
+        '"disbursed_amount_gbp_k" AS total_disbursed_amount_gbp_k '
+        'FROM "dataset" GROUP BY "region" ORDER BY total_approvals DESC'
+    )
+    err = (
+        'Binder Error: column "disbursed_amount_gbp_k" must appear in the GROUP BY clause '
+        'or must be part of an aggregate function.'
+    )
+    schema = [
+        {"column": "region", "type": "VARCHAR"},
+        {"column": "approvals", "type": "DOUBLE"},
+        {"column": "disbursed_amount_gbp_k", "type": "DOUBLE"},
+    ]
+
+    fixed = _auto_fix_group_by_projection_error(sql, err, schema)
+    assert fixed is not None
+    assert 'SUM("disbursed_amount_gbp_k") AS total_disbursed_amount_gbp_k' in fixed
+
+
+def test_pipeline_auto_fix_groupby_error_non_numeric_column():
+    from services.query_pipeline import _auto_fix_group_by_projection_error
+
+    sql = (
+        'SELECT "region", SUM("amount") AS total_amount, "status" AS sample_status '
+        'FROM "dataset" GROUP BY "region" ORDER BY total_amount DESC'
+    )
+    err = (
+        'Binder Error: column "status" must appear in the GROUP BY clause '
+        'or must be part of an aggregate function.'
+    )
+    schema = [
+        {"column": "region", "type": "VARCHAR"},
+        {"column": "amount", "type": "DOUBLE"},
+        {"column": "status", "type": "VARCHAR"},
+    ]
+
+    fixed = _auto_fix_group_by_projection_error(sql, err, schema)
+    assert fixed is not None
+    assert 'ANY_VALUE("status") AS sample_status' in fixed
+
+
+def test_pipeline_auto_fix_groupby_error_multiple_columns_single_pass():
+    from services.query_pipeline import _auto_fix_group_by_projection_error
+
+    sql = (
+        'SELECT "month", "applications" AS total_applications, '
+        '"approvals" AS total_approvals, "disbursed_amount_gbp_k" AS total_disbursed_amount_gbp_k '
+        'FROM "dataset" GROUP BY "month" ORDER BY "month"'
+    )
+    err = (
+        'Binder Error: column "applications" must appear in the GROUP BY clause '
+        'or must be part of an aggregate function.'
+    )
+    schema = [
+        {"column": "month", "type": "VARCHAR"},
+        {"column": "applications", "type": "DOUBLE"},
+        {"column": "approvals", "type": "DOUBLE"},
+        {"column": "disbursed_amount_gbp_k", "type": "DOUBLE"},
+    ]
+
+    fixed = _auto_fix_group_by_projection_error(sql, err, schema)
+    assert fixed is not None
+    assert '"month"' in fixed
+    assert 'SUM("applications") AS total_applications' in fixed
+    assert 'SUM("approvals") AS total_approvals' in fixed
+    assert 'SUM("disbursed_amount_gbp_k") AS total_disbursed_amount_gbp_k' in fixed
+
+
+def test_pipeline_auto_fix_groupby_error_not_applicable_returns_none():
+    from services.query_pipeline import _auto_fix_group_by_projection_error
+
+    sql = 'SELECT "region", SUM("amount") AS total_amount FROM "dataset" GROUP BY "region"'
+    err = 'Catalog Error: Table with name missing_table does not exist!'
+    schema = [{"column": "region", "type": "VARCHAR"}, {"column": "amount", "type": "DOUBLE"}]
+
+    fixed = _auto_fix_group_by_projection_error(sql, err, schema)
+    assert fixed is None
+
+
 # ── Cache ──────────────────────────────────────────────────────
 
 def test_cache_hit_and_miss():

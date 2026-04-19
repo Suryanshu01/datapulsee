@@ -5,19 +5,18 @@ import {
 import { formatNumber } from "../../utils/formatNumber";
 import KPIRow from "./KPIRow";
 
-// Gradient from darkest (rank 1) to lightest — visual hierarchy for rankings
-const BAR_COLORS = ["#42145F", "#5A2D7A", "#6B4C8A", "#7D6B99", "#9E8FB3", "#B8ACC6", "#D1C9D9"];
-const DONUT_COLORS = ["#42145F", "#6B4C8A", "#0F7B3F", "#D4760A", "#3B82F6", "#C4314B", "#8B5CF6", "#059669"];
+const BAR_COLORS = ["#5AB9CC", "#4CAABF", "#409BB2", "#358CA3", "#2B7D93", "#246E82", "#1D5E70"];
+const DONUT_COLORS = ["#5AB9CC", "#4CAABF", "#74C887", "#E5B447", "#7CA9E7", "#D56767", "#6B98D3", "#90D6A4"];
 
 const TIP = {
-  backgroundColor: "#fff",
-  border: "1px solid #E5E7EB",
+  backgroundColor: "var(--surface-2)",
+  border: "1px solid var(--border)",
   borderRadius: 6,
-  color: "#1A1A2E",
+  color: "var(--text)",
   fontSize: 12,
-  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+  boxShadow: "var(--shadow-md)",
 };
-const AXIS = { fontSize: 11, fill: "#6B7280" };
+const AXIS = { fontSize: 11, fill: "var(--text-3)" };
 
 /** Deduplicate rows by x-axis key, summing numeric values for duplicates. */
 function deduplicateData(data, xKey) {
@@ -45,7 +44,7 @@ function CustomTooltip({ active, payload, label }) {
     <div style={TIP}>
       <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
       {payload.map((p) => (
-        <div key={p.dataKey} style={{ color: p.color || "#42145F" }}>
+        <div key={p.dataKey} style={{ color: p.color || "var(--primary)" }}>
           {p.name}: {formatNumber(p.value)}
         </div>
       ))}
@@ -95,7 +94,7 @@ export default function ChartRenderer({ data, chartType, config, kpis }) {
               width={60}
               tickFormatter={formatNumber}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(66,20,95,0.04)" }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--primary-bg)" }} />
             <Bar dataKey={yKey} radius={[4, 4, 0, 0]} animationDuration={800} animationEasing="ease-out">
               {deduplicated.map((_, i) => (
                 <Cell key={i} fill={BAR_COLORS[Math.min(i, BAR_COLORS.length - 1)]} />
@@ -104,10 +103,10 @@ export default function ChartRenderer({ data, chartType, config, kpis }) {
             {barValues.length > 1 && (
               <ReferenceLine
                 y={barAvg}
-                stroke="#9CA3AF"
+                stroke="var(--text-3)"
                 strokeDasharray="4 4"
                 strokeWidth={1}
-                label={{ value: `Avg: ${formatNumber(barAvg)}`, position: "right", fontSize: 10, fill: "#9CA3AF" }}
+                label={{ value: `Avg: ${formatNumber(barAvg)}`, position: "right", fontSize: 10, fill: "var(--text-3)" }}
               />
             )}
           </BarChart>
@@ -135,7 +134,7 @@ export default function ChartRenderer({ data, chartType, config, kpis }) {
               width={75}
               tickFormatter={(v) => String(v).slice(0, 16)}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(66,20,95,0.04)" }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--primary-bg)" }} />
             <Bar dataKey={yKey} radius={[0, 4, 4, 0]} animationDuration={800} animationEasing="ease-out">
               {deduplicated.map((_, i) => (
                 <Cell key={i} fill={BAR_COLORS[Math.min(i, BAR_COLORS.length - 1)]} />
@@ -158,12 +157,6 @@ export default function ChartRenderer({ data, chartType, config, kpis }) {
       <div className="chart-container">
         <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={deduplicated} margin={{ top: 20, right: 8, bottom: 36, left: 0 }}>
-            <defs>
-              <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#42145F" stopOpacity={0.2} />
-                <stop offset="100%" stopColor="#42145F" stopOpacity={0} />
-              </linearGradient>
-            </defs>
             <XAxis
               dataKey={xKey}
               tick={AXIS}
@@ -183,10 +176,10 @@ export default function ChartRenderer({ data, chartType, config, kpis }) {
             <Area
               type="monotone"
               dataKey={yKey}
-              stroke="#42145F"
+              stroke="var(--primary)"
               strokeWidth={2.5}
-              fill="url(#areaFill)"
-              activeDot={{ r: 5, fill: "#42145F", strokeWidth: 0 }}
+              fill="var(--primary-bg)"
+              activeDot={{ r: 5, fill: "var(--primary)", strokeWidth: 0 }}
               animationDuration={1200}
               animationEasing="ease-out"
               dot={(props) => {
@@ -194,11 +187,11 @@ export default function ChartRenderer({ data, chartType, config, kpis }) {
                 const isMax = maxPoint && payload === maxPoint;
                 const isMin = minPoint && payload === minPoint;
                 if (!isMax && !isMin) return null;
-                const color = isMax ? "#0F7B3F" : "#C4314B";
+                const color = isMax ? "var(--success)" : "var(--danger)";
                 const label = isMax ? "▲ High" : "▼ Low";
                 return (
                   <g key={`${cx}-${cy}`}>
-                    <circle cx={cx} cy={cy} r={5} fill={color} stroke="white" strokeWidth={2} />
+                    <circle cx={cx} cy={cy} r={5} fill={color} stroke="var(--surface)" strokeWidth={2} />
                     <text x={cx} y={cy - 12} textAnchor="middle" fontSize={10} fill={color} fontWeight={600}>
                       {label}
                     </text>
@@ -234,7 +227,7 @@ export default function ChartRenderer({ data, chartType, config, kpis }) {
               ))}
             </Pie>
             <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{ fontSize: 12, color: "#6B7280" }} />
+            <Legend wrapperStyle={{ fontSize: 12, color: "var(--text-3)" }} />
           </PieChart>
         </ResponsiveContainer>
       </div>

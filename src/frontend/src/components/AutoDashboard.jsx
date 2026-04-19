@@ -13,6 +13,15 @@ const STARTER_QUESTIONS = [
   "Give me a summary",
 ];
 
+function getInsightCategory(type) {
+  const normalized = String(type || "").toLowerCase();
+  if (normalized.includes("anomaly") || normalized.includes("outlier")) return "ANOMALY";
+  if (normalized.includes("concentration") || normalized.includes("share")) return "CONCENTRATION";
+  if (normalized.includes("quality") || normalized.includes("completeness")) return "QUALITY";
+  if (normalized.includes("correlation") || normalized.includes("relationship")) return "CORRELATION";
+  return "TREND";
+}
+
 export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +29,7 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
   const [input, setInput] = useState("");
   const [showBanner, setShowBanner] = useState(true);
   const [insights, setInsights] = useState([]);
+  const [showDataTalksPanel, setShowDataTalksPanel] = useState(false);
   const topRef = useRef(null);
 
   // Scroll to top whenever the dashboard is shown
@@ -43,7 +53,10 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
     // Fetch proactive insights
     fetch(`${API}/api/insights/${session.session_id}`)
       .then((r) => r.json())
-      .then((d) => setInsights(d.insights || []))
+      .then((d) => {
+        const fetched = d.insights || [];
+        setInsights(fetched);
+      })
       .catch(() => setInsights([]));
   }, [session?.session_id]);
 
@@ -99,6 +112,8 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
     value: r.value,
   }));
   const dimConfig = dashboard.top_dimension ? { x: "label", y: "value" } : null;
+  const dataQualityInsights = insights.filter((ins) => ins.type === "data_quality_score");
+  const proactiveInsights = insights.filter((ins) => ins.type !== "data_quality_score");
 
   return (
     <div className="dashboard-page">
@@ -117,6 +132,17 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
           <span className="dash-pill">
             {dashboard.date_range.from} – {dashboard.date_range.to}
           </span>
+        )}
+        {proactiveInsights.length > 0 && (
+          <button
+            className="talks-panel-trigger"
+            onClick={() => setShowDataTalksPanel(true)}
+            type="button"
+          >
+            <span>Data Talks to You</span>
+            <span className="talks-panel-count">{proactiveInsights.length}</span>
+            <span className="talks-panel-new">NEW</span>
+          </button>
         )}
       </div>
 
@@ -195,7 +221,7 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
         )}
 
         {/* ── Data Quality Badge ──────────────────────────────────── */}
-        {insights.filter((ins) => ins.type === "data_quality_score").map((dq, i) => (
+        {dataQualityInsights.map((dq, i) => (
           <div key={i} className="data-quality-badge">
             <span className={`dq-score ${dq.quality_pct >= 95 ? "dq-good" : dq.quality_pct >= 80 ? "dq-ok" : "dq-bad"}`}>{dq.quality_pct}%</span>
             <span className="dq-label">Data Quality</span>
@@ -203,31 +229,24 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
           </div>
         ))}
 
-        {/* ── Insights Feed ────────────────────────────────────────── */}
-        {insights.filter((ins) => ins.type !== "data_quality_score").length > 0 && (
-          <section className="dash-section">
-            <div className="dash-section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 16 }}>💡</span>
-              Data Talks to You
-              <span style={{ fontSize: 12, fontWeight: 400, color: "var(--text-3)", marginLeft: 4 }}>
-                {insights.filter((ins) => ins.type !== "data_quality_score").length} insight{insights.filter((ins) => ins.type !== "data_quality_score").length !== 1 ? "s" : ""} found — pure statistics, no AI
-              </span>
+        {/* ── Data Talks Teaser (dedicated panel) ──────────────────── */}
+        {proactiveInsights.length > 0 && (
+          <section className="data-talks-teaser">
+            <div>
+              <span className="data-talks-teaser-pill">Innovation Feature</span>
+              <div className="data-talks-teaser-title">Data Talks to You now has its own panel</div>
+              <p className="data-talks-teaser-sub">
+                {proactiveInsights.length} proactive insight{proactiveInsights.length !== 1 ? "s" : ""} detected from deterministic statistics.
+                Open the panel to review them and jump into deeper analysis.
+              </p>
             </div>
-            <div className="insights-grid">
-              {insights.filter((ins) => ins.type !== "data_quality_score").map((insight, i) => (
-                <div key={i} className={`insight-card insight-${insight.severity}`} style={{ animationDelay: `${i * 80}ms` }}>
-                  <div className="insight-card-header">
-                    <span>{insight.severity === "high" ? "⚠️" : insight.severity === "medium" ? "📊" : "💡"}</span>
-                    <span className="insight-card-type">{insight.type.replace(/_/g, " ")}</span>
-                  </div>
-                  <div className="insight-card-title">{insight.title}</div>
-                  <div className="insight-card-desc">{insight.description}</div>
-                  {insight.suggested_question && (
-                    <button className="insight-dive-btn" onClick={() => onStartChat(insight.suggested_question)}>Dive deeper →</button>
-                  )}
-                </div>
-              ))}
-            </div>
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => setShowDataTalksPanel(true)}
+            >
+              Open Data Talks Panel
+            </button>
           </section>
         )}
 
@@ -297,6 +316,56 @@ export default function AutoDashboard({ session, onStartChat, onGoToDict }) {
           </div>
         </section>
       </div>
+
+      {showDataTalksPanel && (
+        <DataTalksPanel
+          insights={proactiveInsights}
+          onClose={() => setShowDataTalksPanel(false)}
+          onStartChat={onStartChat}
+        />
+      )}
+    </div>
+  );
+}
+
+function DataTalksPanel({ insights, onClose, onStartChat }) {
+  return (
+    <div className="talks-panel-overlay" onClick={onClose}>
+      <aside className="talks-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="talks-panel-header">
+          <div>
+            <div className="talks-panel-kicker">INNOVATION FEATURE</div>
+            <h3 className="talks-panel-title">Data Talks to You</h3>
+            <p className="talks-panel-subtitle">
+              {insights.length} insight{insights.length !== 1 ? "s" : ""} found using deterministic stats (no AI inference).
+            </p>
+          </div>
+          <button className="talks-panel-close" type="button" onClick={onClose} aria-label="Close Data Talks panel">
+            ✕
+          </button>
+        </div>
+
+        <div className="talks-panel-list">
+          {insights.map((insight, i) => (
+            <div key={i} className={`talks-insight-card insight-${insight.severity}`}>
+              <span className={`insight-category-tag insight-category-${insight.severity}`}>
+                {getInsightCategory(insight.type)}
+              </span>
+              <div className="insight-card-header">
+                <span>{insight.severity === "high" ? "⚠️" : insight.severity === "medium" ? "📊" : "💡"}</span>
+                <span className="insight-card-type">{insight.type.replace(/_/g, " ")}</span>
+              </div>
+              <div className="insight-card-title">{insight.title}</div>
+              <div className="insight-card-desc">{insight.description}</div>
+              {insight.suggested_question && (
+                <button className="insight-dive-btn" onClick={() => onStartChat(insight.suggested_question)}>
+                  Dive deeper →
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </aside>
     </div>
   );
 }

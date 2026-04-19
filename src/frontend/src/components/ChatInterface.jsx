@@ -74,6 +74,14 @@ export default function ChatInterface({ messages, onAsk, loading, semanticLayer,
   };
 
   const hasMessages = messages.length > 1;
+  const storylineEntries = messages
+    .filter((msg) => msg.role === "assistant")
+    .map((msg, idx) => ({
+      id: idx + 1,
+      intent: msg.intent || "general",
+      summary: msg.insightLine || firstSentence(msg.content) || "Answer generated.",
+      confidence: msg.confidence?.level || null,
+    }));
 
   return (
     <div className="chat-layout">
@@ -132,6 +140,7 @@ export default function ChatInterface({ messages, onAsk, loading, semanticLayer,
           <WelcomeScreen onAsk={handleAsk} mode={mode} />
         ) : (
           <>
+            {storylineEntries.length > 0 && <SessionStoryline entries={storylineEntries} />}
             {messages.map((msg, i) => (
               <MessageBubble
                 key={i}
@@ -191,9 +200,32 @@ function WelcomeScreen({ onAsk, mode }) {
   );
 }
 
+function SessionStoryline({ entries }) {
+  return (
+    <section className="storyline-panel">
+      <div className="storyline-title">Session Storyline</div>
+      <div className="storyline-items">
+        {entries.slice(-5).map((entry) => (
+          <div key={entry.id} className="storyline-item">
+            <span className="storyline-dot">{entry.id}</span>
+            <div>
+              <div className="storyline-summary">{entry.summary}</div>
+              <div className="storyline-meta">
+                <span>{entry.intent}</span>
+                {entry.confidence && <span>Confidence: {entry.confidence}</span>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /* ── Message Bubble ──────────────────────────────────────────── */
 function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
   const [showTable, setShowTable] = useState(false);
+  const [showEvidence, setShowEvidence] = useState(false);
 
   if (msg.role === "system") {
     return (
@@ -252,6 +284,15 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
   }
 
   // Assistant — visual-first hierarchy
+  const executiveBrief = buildExecutiveBrief(msg);
+  const impactBanner = buildImpactBanner(msg);
+  const metricsCount = msg.metricsUsed?.length || 0;
+  const coverageLabel = msg.dataCoverage
+    ? `${msg.dataCoverage.rows_matched}/${msg.dataCoverage.total_rows} rows`
+    : msg.coveragePct != null
+      ? `${msg.coveragePct}% coverage`
+      : null;
+
   return (
     <div className="assistant-message">
       {/* Intent classification badge */}
@@ -265,6 +306,14 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
             {msg.intent === "general" && "💡 "}
             {msg.intent.charAt(0).toUpperCase() + msg.intent.slice(1)} Analysis
           </span>
+        </div>
+      )}
+
+      {impactBanner && (
+        <div className={`impact-banner impact-banner-${impactBanner.tone}`}>
+          <div className="impact-banner-label">Impact Snapshot</div>
+          <div className="impact-banner-headline">{impactBanner.headline}</div>
+          {impactBanner.detail && <div className="impact-banner-detail">{impactBanner.detail}</div>}
         </div>
       )}
 
@@ -308,6 +357,11 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
       {/* 4. Explanation with purple left border */}
       {msg.content && (
         <p className="explanation">{msg.content}</p>
+      )}
+
+      {/* 4a. Executive brief */}
+      {executiveBrief && (
+        <ExecutiveBrief brief={executiveBrief} />
       )}
 
       {/* 4b. Action insight */}
@@ -366,6 +420,28 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
         </div>
       )}
 
+      {/* Evidence chips */}
+      {msg.sql && (
+        <div className="evidence-chip-row">
+          <button
+            type="button"
+            className="evidence-chip evidence-chip-primary"
+            onClick={() => setShowEvidence((v) => !v)}
+          >
+            {showEvidence ? "Hide evidence" : "View evidence"}
+          </button>
+          {metricsCount > 0 && (
+            <span className="evidence-chip">Metrics: {metricsCount}</span>
+          )}
+          {coverageLabel && (
+            <span className="evidence-chip">{coverageLabel}</span>
+          )}
+          {msg.confidence?.level && (
+            <span className="evidence-chip">Confidence: {msg.confidence.level}</span>
+          )}
+        </div>
+      )}
+
       {/* Cached badge */}
       {msg.cached && <span className="cached-badge">Cached result</span>}
 
@@ -415,13 +491,18 @@ function MessageBubble({ msg, onAsk, mode, semanticLayer }) {
 
       {/* 7. Transparency — collapsed <details> */}
       {msg.sql && (
-        <details className="transparency-toggle">
-          <summary>How was this answered?</summary>
+        <details className="transparency-toggle" open={showEvidence}>
+          <summary onClick={(e) => { e.preventDefault(); setShowEvidence((v) => !v); }}>
+            How was this answered?
+          </summary>
           <div className="transparency-content">
             {msg.queryValidated && (
               <span className="validation-badge">✓ Query validated — read-only, no destructive operations</span>
             )}
             <span className="intent-badge">{msg.intent}</span>
+            {msg.queryExplanation && (
+              <p style={{ marginTop: 6 }}><strong>Query goal:</strong> {msg.queryExplanation}</p>
+            )}
             {msg.retried && <span className="retried-pill" style={{ marginLeft: 6 }}>Self-corrected</span>}
             {msg.confidence && (
               <p style={{ marginTop: 6 }}>
@@ -487,6 +568,79 @@ function CopyButton({ msg }) {
       {copied ? "Copied" : "Copy as markdown"}
     </button>
   );
+}
+
+function ExecutiveBrief({ brief }) {
+  return (
+    <div className="executive-brief">
+      <div className="executive-brief-title">Executive Brief</div>
+      <div className="executive-brief-grid">
+        <div className="executive-brief-item">
+          <span className="executive-brief-label">What happened</span>
+          <p>{brief.whatHappened}</p>
+        </div>
+        <div className="executive-brief-item">
+          <span className="executive-brief-label">Why</span>
+          <p>{brief.whyItHappened}</p>
+        </div>
+        <div className="executive-brief-item">
+          <span className="executive-brief-label">What to do next</span>
+          <p>{brief.nextAction}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function firstSentence(text) {
+  if (!text) return "";
+  const sentence = text.split(/(?<=[.!?])\s+/)[0]?.trim();
+  return sentence || text;
+}
+
+function buildExecutiveBrief(msg) {
+  if (!msg?.content && !msg?.insightLine) return null;
+
+  const topDriver = msg.driverAnalysis?.drivers?.[0];
+  const whatHappened = msg.insightLine || firstSentence(msg.content) || "Result generated successfully.";
+  const whyItHappened = topDriver
+    ? `${topDriver.dimension_value} drove the biggest movement with ${topDriver.contribution_pct}% contribution.`
+    : msg.confidence?.reason
+      ? msg.confidence.reason
+      : "Primary driver could not be isolated from this result set.";
+  const nextAction = msg.actionInsight || msg.followUps?.[0] || "Use a follow-up question to drill down by segment or period.";
+
+  return { whatHappened, whyItHappened, nextAction };
+}
+
+function buildImpactBanner(msg) {
+  if (!msg?.content && !msg?.insightLine) return null;
+
+  const headline = msg.insightLine || firstSentence(msg.content);
+  const topDriver = msg.driverAnalysis?.drivers?.[0];
+  const details = [];
+
+  if (topDriver) {
+    details.push(`Top driver: ${topDriver.dimension_value} (${topDriver.contribution_pct}% contribution)`);
+  }
+  if (msg.confidence?.level) {
+    details.push(`Confidence: ${msg.confidence.level}`);
+  }
+  if (msg.coveragePct != null) {
+    details.push(`Coverage: ${msg.coveragePct}%`);
+  }
+
+  const tone = msg.confidence?.level === "high"
+    ? "high"
+    : msg.confidence?.level === "low"
+      ? "low"
+      : "medium";
+
+  return {
+    headline,
+    detail: details.join(" · "),
+    tone,
+  };
 }
 
 /* ── Loading indicator (step-by-step thinking) ───────────────── */

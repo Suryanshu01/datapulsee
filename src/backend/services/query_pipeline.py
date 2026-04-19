@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 import duckdb
@@ -29,6 +30,254 @@ from services.driver_analysis import (
 )
 
 logger = logging.getLogger(__name__)
+
+_AGGREGATE_FUNCS = ("SUM", "AVG", "COUNT", "MIN", "MAX", "ANY_VALUE")
+_NUMERIC_TYPE_TOKENS = (
+    "INT",
+    "INTEGER",
+    "BIGINT",
+    "SMALLINT",
+    "TINYINT",
+    "HUGEINT",
+    "UBIGINT",
+    "FLOAT",
+    "DOUBLE",
+    "DECIMAL",
+    "NUMERIC",
+    "REAL",
+)
+
+
+def _is_word_boundary(text: str, index: int) -> bool:
+    """Return True if *index* is at a SQL word boundary in *text*."""
+    if index < 0 or index >= len(text):
+        return True
+    return not (text[index].isalnum() or text[index] == "_")
+
+
+def _find_top_level_keyword(sql: str, keyword: str, start: int = 0) -> int:
+    """
+    Find a keyword outside quotes/parentheses, returning index or -1.
+
+    This lets us parse simple SELECT clauses without pulling in a SQL parser.
+    """
+    lower = sql.lower()
+    key = keyword.lower()
+    klen = len(key)
+
+    depth = 0
+    in_single = False
+    in_double = False
+    i = start
+
+    while i < len(sql):
+        ch = sql[i]
+
+        if not in_double and ch == "'":
+            in_single = not in_single
+            i += 1
+            continue
+
+        if not in_single and ch == '"':
+            in_double = not in_double
+            i += 1
+            continue
+
+        if in_single or in_double:
+            i += 1
+            continue
+
+        if ch == "(":
+            depth += 1
+            i += 1
+            continue
+        if ch == ")":
+            depth = max(0, depth - 1)
+            i += 1
+            continue
+
+        if depth == 0 and lower[i:i + klen] == key:
+            before = i - 1
+            after = i + klen
+            if _is_word_boundary(sql, before) and _is_word_boundary(sql, after):
+                return i
+
+        i += 1
+
+    return -1
+
+
+def _split_top_level_csv(expr: str) -> list[str]:
+    """Split a comma-separated SQL list at top level only."""
+    parts: list[str] = []
+    buf: list[str] = []
+    depth = 0
+    in_single = False
+    in_double = False
+
+    for ch in expr:
+        if not in_double and ch == "'":
+            in_single = not in_single
+            buf.append(ch)
+            continue
+
+        if not in_single and ch == '"':
+            in_double = not in_double
+            buf.append(ch)
+            continue
+
+        if in_single or in_double:
+            buf.append(ch)
+            continue
+
+        if ch == "(":
+            depth += 1
+            buf.append(ch)
+            continue
+        if ch == ")":
+            depth = max(0, depth - 1)
+            buf.append(ch)
+            continue
+
+        if ch == "," and depth == 0:
+            parts.append("".join(buf).strip())
+            buf = []
+            continue
+
+        buf.append(ch)
+
+    tail = "".join(buf).strip()
+    if tail:
+        parts.append(tail)
+
+    return parts
+
+
+def _lookup_column_type(schema: list[dict], column_name: str) -> str | None:
+    """Return DuckDB type string for a column from schema metadata, if present."""
+    for col in schema:
+        if col.get("column") == column_name:
+            return col.get("type")
+    return None
+
+
+def _is_numeric_type(type_name: str | None) -> bool:
+    """Heuristic: determine whether a DuckDB type string is numeric."""
+    if not type_name:
+        return False
+    upper = type_name.upper()
+    return any(token in upper for token in _NUMERIC_TYPE_TOKENS)
+
+
+def _auto_fix_group_by_projection_error(
+    sql: str,
+    error_message: str,
+    schema: list[dict],
+) -> str | None:
+    """
+    Deterministically fix a common DuckDB binder error for grouped queries.
+
+    Example error:
+      column "x" must appear in the GROUP BY clause or must be part of an aggregate function
+
+    If a plain projected column causes this in SELECT, convert it to:
+      SUM("x") AS alias (numeric columns)
+      ANY_VALUE("x") AS alias (non-numeric columns)
+    """
+    err_match = re.search(
+        r'column\s+"([^"]+)"\s+must\s+appear\s+in\s+the\s+GROUP\s+BY\s+clause',
+        error_message,
+        re.IGNORECASE,
+    )
+    if not err_match:
+        return None
+
+    offending_col = err_match.group(1)
+    if "group by" not in sql.lower():
+        return None
+
+    table_prefix = r'(?:(?:"[^"]+")|(?:[A-Za-z_][\w$]*))\s*\.\s*'
+    quoted_col_ref = rf'(?:{table_prefix})?"{re.escape(offending_col)}"'
+    if not re.search(quoted_col_ref, sql, re.IGNORECASE):
+        return None
+
+    select_pos = _find_top_level_keyword(sql, "select")
+    if select_pos == -1:
+        return None
+    from_pos = _find_top_level_keyword(sql, "from", start=select_pos + 6)
+    if from_pos == -1:
+        return None
+
+    select_clause = sql[select_pos + 6:from_pos]
+    select_items = _split_top_level_csv(select_clause)
+    if not select_items:
+        return None
+
+    group_by_pos = _find_top_level_keyword(sql, "group by")
+    if group_by_pos == -1:
+        return None
+
+    group_end_candidates = [
+        _find_top_level_keyword(sql, "having", start=group_by_pos + len("group by")),
+        _find_top_level_keyword(sql, "order by", start=group_by_pos + len("group by")),
+        _find_top_level_keyword(sql, "limit", start=group_by_pos + len("group by")),
+    ]
+    group_end_candidates = [p for p in group_end_candidates if p != -1]
+    group_end = min(group_end_candidates) if group_end_candidates else len(sql)
+    group_clause = sql[group_by_pos + len("group by"):group_end]
+
+    group_col_pattern = re.compile(
+        rf'^\s*(?:{table_prefix})?"([^"]+)"\s*$',
+        re.IGNORECASE,
+    )
+    grouped_columns: set[str] = set()
+    for expr in _split_top_level_csv(group_clause):
+        m = group_col_pattern.match(expr)
+        if m:
+            grouped_columns.add(m.group(1))
+
+    item_pattern = re.compile(
+        rf'^\s*((?:{table_prefix})?"([^"]+)")\s*(?:AS\s+((?:"[^"]+")|(?:[A-Za-z_][\w$]*)))?\s*$',
+        re.IGNORECASE,
+    )
+
+    changed = False
+    fixed_items: list[str] = []
+    for item in select_items:
+        matched = item_pattern.match(item)
+        if not matched:
+            fixed_items.append(item)
+            continue
+
+        col_ref = matched.group(1)
+        col_name = matched.group(2)
+        alias = matched.group(3)
+
+        if col_name in grouped_columns:
+            fixed_items.append(item)
+            continue
+
+        if re.search(
+            rf'\b(?:{"|".join(_AGGREGATE_FUNCS)})\s*\(\s*{re.escape(col_ref)}\s*\)',
+            item,
+            re.IGNORECASE,
+        ):
+            fixed_items.append(item)
+            continue
+
+        col_type = _lookup_column_type(schema, col_name)
+        agg_func = "SUM" if _is_numeric_type(col_type) else "ANY_VALUE"
+        if not alias:
+            alias = f"total_{col_name}" if agg_func == "SUM" else col_name
+
+        fixed_items.append(f"{agg_func}({col_ref}) AS {alias}")
+        changed = True
+
+    if not changed:
+        return None
+
+    rebuilt_select = ", ".join(fixed_items)
+    return f"{sql[:select_pos + 6]} {rebuilt_select} {sql[from_pos:]}"
 
 
 # ── Agent 1: The Analyst ──────────────────────────────────────────────────
@@ -269,9 +518,17 @@ def execute_with_retry(
                 logger.warning(
                     "SQL attempt %d failed: %s. Retrying...", attempt + 1, err
                 )
-                last_sql = _fix_sql(
-                    last_sql, str(err), relevant_schema, table_name
+                auto_fixed = _auto_fix_group_by_projection_error(
+                    last_sql, str(err), relevant_schema
                 )
+                if auto_fixed and auto_fixed != last_sql:
+                    logger.info(
+                        "Applied deterministic GROUP BY fix before LLM retry."
+                    )
+                    last_sql = auto_fixed
+                    continue
+
+                last_sql = _fix_sql(last_sql, str(err), relevant_schema, table_name)
             else:
                 raise HTTPException(
                     status_code=500,
