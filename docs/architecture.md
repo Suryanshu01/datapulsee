@@ -22,7 +22,7 @@ graph LR
     end
 
     subgraph External["External Services"]
-        Groq["Groq API (Llama 3.3 70B)"]
+        Groq["Groq API (GPT-OSS 20B)"]
     end
 
     DuckDB["DuckDB (In-Memory)"]

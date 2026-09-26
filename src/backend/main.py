@@ -17,13 +17,15 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Load .env before importing modules that read config at import time.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
 from routes import semantic, upload
 from routes import query as query_router
 from routes import dashboard as dashboard_router
 from utils.duckdb_manager import session_count
 from utils.cache import cache_stats
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 logging.basicConfig(
     level=logging.INFO,

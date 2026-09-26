@@ -17,7 +17,10 @@ SAMPLES_DIR: Path = ASSETS_DIR / "samples"
 
 # ── LLM Provider ──────────────────────────────────────────────
 GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL: str = "llama-3.1-8b-instant"
+# llama-3.1-8b-instant was retired by Groq on 2026-08-16; gpt-oss-20b is the official replacement.
+GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+# gpt-oss is a reasoning model — keep effort low so answers stay near-instant.
+GROQ_REASONING_EFFORT: str = os.getenv("GROQ_REASONING_EFFORT", "low")
 LLM_TEMPERATURE: float = 0.1
 LLM_MAX_RETRIES: int = 2
 LLM_RETRY_DELAY_SECONDS: int = 10

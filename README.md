@@ -137,7 +137,7 @@ npm run dev
 | Technology | Role | Why This Choice |
 |-----------|------|-----------------|
 | **DuckDB** | SQL engine | Zero-config in-memory OLAP. Handles `GROUP BY`, window functions, and `FULL OUTER JOIN` on CSV data — faster than SQLite for analytical queries. |
-| **Groq (Llama 3.1 8B)** | LLM provider | Free-tier with 500K tokens/day. Sub-second inference latency. Easily swappable to 70B for better SQL quality. |
+| **Groq (GPT-OSS 20B)** | LLM provider | Free tier, very fast inference. Replaces the retired Llama 3.1 8B. Swap to `openai/gpt-oss-120b` via `GROQ_MODEL` for better SQL quality. |
 | **FastAPI** | Backend framework | Async Python with auto-generated API docs at `/docs`. Pydantic validation on all endpoints. |
 | **React 18 + Vite** | Frontend | Component-based UI with instant hot reload. Lean — no Redux, no heavy state libraries. |
 | **Recharts** | Charts | Composable React chart library with built-in animations. Supports all chart types needed (bar, line, area, donut). |

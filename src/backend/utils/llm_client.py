@@ -1,12 +1,13 @@
 """
-Thin wrapper around the Groq API (Llama 3.1).
+Thin wrapper around the Groq API (GPT-OSS 20B).
 
 Centralising all LLM calls here means:
   - API key validation happens in one place.
   - Retry / backoff logic is shared across every service that calls the model.
   - Tests can mock this module without touching individual services.
 
-Model choice: llama-3.1-8b-instant — fast, highly capable, generous free tier.
+Model choice: openai/gpt-oss-20b — Groq's replacement for the retired
+llama-3.1-8b-instant. Override with the GROQ_MODEL env var.
 """
 
 from __future__ import annotations
@@ -18,9 +19,13 @@ import time
 from fastapi import HTTPException
 from groq import Groq
 
-_GROQ_MODEL = "llama-3.1-8b-instant"
-_MAX_RETRIES = 2
-_RETRY_DELAY_SECONDS = 10
+from config import (
+    GROQ_MODEL as _GROQ_MODEL,
+    GROQ_REASONING_EFFORT as _REASONING_EFFORT,
+    LLM_MAX_RETRIES as _MAX_RETRIES,
+    LLM_RETRY_DELAY_SECONDS as _RETRY_DELAY_SECONDS,
+    LLM_TEMPERATURE as _TEMPERATURE,
+)
 
 
 def _sanitize_text_for_utf8(text: str) -> str:
@@ -57,9 +62,10 @@ def generate(prompt: str) -> str:
             response = client.chat.completions.create(
                 model=_GROQ_MODEL,
                 messages=[{"role": "user", "content": safe_prompt}],
-                temperature=0.1,
+                temperature=_TEMPERATURE,
+                reasoning_effort=_REASONING_EFFORT,
             )
-            return response.choices[0].message.content.strip()
+            return (response.choices[0].message.content or "").strip()
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             if attempt < _MAX_RETRIES:

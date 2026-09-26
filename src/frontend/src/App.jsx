@@ -166,7 +166,7 @@ export default function App() {
         <div className="sidebar-logo">
           <div className="logo-mark">DP</div>
           <span className="logo-name">DataPulse</span>
-          <span className="sidebar-model">groq · llama-3.1-8b</span>
+          <span className="sidebar-model">groq · gpt-oss-20b</span>
         </div>
 
         <button
