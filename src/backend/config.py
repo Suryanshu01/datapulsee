@@ -22,6 +22,10 @@ GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 # gpt-oss is a reasoning model — keep effort low so answers stay near-instant.
 GROQ_REASONING_EFFORT: str = os.getenv("GROQ_REASONING_EFFORT", "low")
 LLM_TEMPERATURE: float = 0.1
+# Groq truncates replies at 2048 tokens unless told otherwise, which cuts the
+# semantic-layer JSON short for datasets with more than ~6 numeric columns.
+# This cap does not count against the tokens-per-minute rate limit.
+LLM_MAX_COMPLETION_TOKENS: int = 8192
 LLM_MAX_RETRIES: int = 2
 LLM_RETRY_DELAY_SECONDS: int = 10
 

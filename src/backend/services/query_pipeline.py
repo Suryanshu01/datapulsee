@@ -280,6 +280,56 @@ def _auto_fix_group_by_projection_error(
     return f"{sql[:select_pos + 6]} {rebuilt_select} {sql[from_pos:]}"
 
 
+# ── LLM output coercion ───────────────────────────────────────────────────
+# The model occasionally returns null, numbers-as-strings ("-22%") or the
+# wrong container type. QueryResponse rejects those with an unhandled
+# validation error, so coerce them to the declared shapes first.
+
+def _str_list(value: Any) -> list[str]:
+    """Return *value* if it is a list, keeping only its string items; else []."""
+    return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []
+
+
+def _as_text(value: Any) -> str:
+    """Coerce an LLM text field to a string (None -> "", list -> joined)."""
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return " ".join(str(v) for v in value)
+    return str(value)
+
+
+def _as_float(value: Any) -> float | None:
+    """Parse a number the LLM may send as "-22%" or "1,200"; None if unparseable."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.replace("%", "").replace(",", "").strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _normalize_kpis(kpis: Any) -> list[dict[str, Any]]:
+    """Coerce LLM KPI cards to the fields and types the KPI model accepts."""
+    if not isinstance(kpis, list):
+        return []
+    return [
+        {
+            "label": _as_text(kpi.get("label")),
+            "value": kpi.get("value"),
+            "formatted": _as_text(kpi.get("formatted")),
+            "delta": _as_float(kpi.get("delta")),
+            "delta_label": _as_text(kpi.get("delta_label")),
+        }
+        for kpi in kpis
+        if isinstance(kpi, dict)
+    ]
+
+
 # ── Agent 1: The Analyst ──────────────────────────────────────────────────
 
 def run_analyst(
@@ -366,14 +416,16 @@ If needs_clarification is true, return:
             status_code=500,
             detail=f"Analyst agent returned invalid JSON: {exc}",
         )
+    if not isinstance(result, dict):
+        raise HTTPException(status_code=500, detail="Analyst agent did not return a JSON object")
 
     # Validate intent
     if result.get("intent") not in VALID_INTENTS:
         result["intent"] = "general"
 
     result.setdefault("needs_clarification", False)
-    result.setdefault("relevant_metrics", [])
-    result.setdefault("relevant_dimensions", [])
+    result["relevant_metrics"] = _str_list(result.get("relevant_metrics"))
+    result["relevant_dimensions"] = _str_list(result.get("relevant_dimensions"))
     result.setdefault("time_dimension", None)
 
     return result
@@ -694,7 +746,7 @@ ORIGINAL QUESTION: "{question}"
 INTENT: {intent}
 SQL USED: {sql}
 RESULT COLUMNS: {json.dumps(result_columns)}
-RESULTS (first 20 rows): {json.dumps(sample_rows)}
+RESULTS (first 20 rows): {json.dumps(sample_rows, default=str)}
 SEMANTIC LAYER CONTEXT: {json.dumps(semantic_layer.get("data_summary", ""))}
 {driver_context}
 GUIDANCE: {intent_guidance.get(intent, intent_guidance["general"])}
@@ -767,28 +819,31 @@ IMPORTANT:
     try:
         result = json.loads(cleaned)
     except json.JSONDecodeError:
+        result = None
+    if not isinstance(result, dict):
         logger.warning("Explainer returned invalid JSON, using fallback")
         return _fallback_explanation(result_data, result_columns, intent)
 
     # Validate chart config columns exist in results
-    config = result.get("chart_config", {})
+    config = result.get("chart_config")
+    if not isinstance(config, dict):
+        config = {}
     if config.get("x") and config["x"] not in result_columns:
         config["x"] = result_columns[0] if result_columns else None
     if config.get("y") and config["y"] not in result_columns:
         config["y"] = result_columns[-1] if len(result_columns) > 1 else result_columns[0] if result_columns else None
     result["chart_config"] = config
 
-    result.setdefault("explanation", "Results retrieved successfully.")
-    result.setdefault("insight_line", "")
-    result.setdefault("action_insight", None)
-    result.setdefault("verdict", None)
-    result.setdefault("chart_type", "table")
-    result.setdefault("kpis", [])
-    result.setdefault("follow_ups", [])
+    result["explanation"] = _as_text(result.get("explanation")) or "Results retrieved successfully."
+    result["insight_line"] = _as_text(result.get("insight_line"))
+    result["action_insight"] = _as_text(result.get("action_insight")) or None
+    result["chart_type"] = _as_text(result.get("chart_type")) or "table"
+    result["kpis"] = _normalize_kpis(result.get("kpis"))
+    result["follow_ups"] = _str_list(result.get("follow_ups"))
 
     # Normalize "null" string to None for verdict
-    if result.get("verdict") in ("null", "None", ""):
-        result["verdict"] = None
+    verdict = _as_text(result.get("verdict"))
+    result["verdict"] = None if verdict in ("null", "None", "") else verdict
 
     return result
 
@@ -849,7 +904,7 @@ def run_pipeline(
         return {
             "needs_clarification": True,
             "clarification_question": analyst_result.get("clarification_question", "Could you be more specific?"),
-            "clarification_options": analyst_result.get("clarification_options", []),
+            "clarification_options": _str_list(analyst_result.get("clarification_options")),
             "intent": analyst_result.get("intent", "general"),
         }
 

@@ -14,8 +14,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 # Load .env before importing modules that read config at import time.
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
@@ -67,6 +68,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def unhandled_error(request: Request, exc: Exception) -> JSONResponse:
+    """Return unexpected errors as JSON so the UI can show what failed, not a bare 500."""
+    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"})
+
 
 app.include_router(upload.router)
 app.include_router(query_router.router)

@@ -378,6 +378,69 @@ def test_pipeline_auto_fix_groupby_error_not_applicable_returns_none():
     assert fixed is None
 
 
+def _date_session():
+    """Register a session whose table has a DATE column, like the customer_support sample."""
+    from utils.duckdb_manager import create_session
+    conn = duckdb.connect()
+    conn.execute(
+        "CREATE TABLE dataset AS SELECT * FROM (VALUES "
+        "(DATE '2024-01-01', 'Email', 10), (DATE '2024-01-02', 'Chat', 20), (DATE '2024-01-03', 'Email', 30)"
+        ") AS v(date, channel, tickets)"
+    )
+    schema = [{"column": "date", "type": "DATE"}, {"column": "channel", "type": "VARCHAR"}, {"column": "tickets", "type": "BIGINT"}]
+    session_id = f"date-session-{time.time()}"
+    create_session(session_id, conn, schema, {"metrics": [], "dimensions": [], "time_dimensions": []}, "dataset", "t.csv", 3)
+    return session_id
+
+
+def test_ask_date_results_and_loose_llm_output_return_200():
+    analyst = '{"intent": "general", "relevant_metrics": null, "relevant_dimensions": null, "plan": "Daily tickets", "needs_clarification": false}'
+    sql = 'SELECT "date", SUM("tickets") AS total_tickets FROM dataset GROUP BY "date" ORDER BY "date"'
+    explainer = (
+        '{"explanation": null, "insight_line": null, "chart_type": "line", "chart_config": null,'
+        ' "kpis": [{"label": "Tickets", "value": 60, "formatted": 60, "delta": "-22%"}], "follow_ups": "none"}'
+    )
+    with patch("services.query_pipeline.generate", side_effect=[analyst, sql, explainer]):
+        resp = client.post("/api/ask", json={"session_id": _date_session(), "question": "Daily trend of tickets"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total_rows"] == 3
+    assert body["kpis"][0]["delta"] == -22.0
+    assert body["kpis"][0]["formatted"] == "60"
+    assert body["insight_line"] == ""
+    assert body["follow_ups"] == []
+
+
+def test_unhandled_error_returns_json_detail():
+    lenient_client = TestClient(app, raise_server_exceptions=False)
+    with patch("routes.query.run_pipeline", side_effect=RuntimeError("boom")):
+        resp = lenient_client.post("/api/ask", json={"session_id": _date_session(), "question": "anything"})
+    assert resp.status_code == 500
+    assert resp.json()["detail"] == "RuntimeError: boom"
+
+
+def test_semantic_layer_falls_back_to_column_types_when_llm_output_truncated():
+    import asyncio
+    from services.schema_analyzer import analyze_schema
+    from services.semantic_engine import generate_semantic_layer
+    conn = duckdb.connect()
+    conn.execute(
+        "CREATE TABLE dataset AS SELECT * FROM (VALUES "
+        "(101, DATE '2024-01-01', 'North', 5, 9.5), (102, DATE '2024-02-01', 'South', 7, 4.25)"
+        ") AS v(order_id, order_date, region, units, price)"
+    )
+    schema, stats, sample, _ = analyze_schema(conn, "dataset")
+    with patch("services.semantic_engine.generate", return_value='{"metrics": [{"name": "total_units", "descr'):
+        layer = asyncio.run(generate_semantic_layer(schema, sample, stats))
+
+    metric_names = {m["name"] for m in layer["metrics"]}
+    assert {"total_units", "avg_units", "count_units", "total_price"} <= metric_names
+    assert not any(m["column"] == "order_id" for m in layer["metrics"])
+    assert [(d["column"], d["data_type"]) for d in layer["dimensions"]] == [("region", "geographic")]
+    assert [td["column"] for td in layer["time_dimensions"]] == ["order_date"]
+    assert 'SUM("units")' in {m["expr"] for m in layer["metrics"]}
+
+
 # ── Cache ──────────────────────────────────────────────────────
 
 def test_cache_hit_and_miss():
